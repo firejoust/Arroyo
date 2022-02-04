@@ -1,3 +1,13 @@
+mod arguments;
+mod encoding;
+
+use encoding::bencode;
+
 fn main() {
-    println!("Hello, world!");
+    let bs = bencode::ByteStr::from("Hello, world!");
+    match bs {
+        Ok(v) => println!("{}", v.to_string().unwrap()),
+        Err(e) => println!("{}", e)
+    }
+    
 }
