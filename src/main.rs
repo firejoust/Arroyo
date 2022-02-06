@@ -1,17 +1,19 @@
 mod arguments;
 mod encoding;
 
-use encoding::bencode::{ByteStr, Int, Literal};
+use encoding::bencode::{ByteStr, Int, Literal, Error};
 
-fn main() {
+fn main() -> Result<(), Error> {
     println!("String unwrap test:");
-    let bs = ByteStr::from_str("Hello, world!");
-    match bs {
-        Ok(v) => println!("{}", v.stringify().unwrap()),
-        Err(e) => println!("{}", e)
-    }
+    let bs =  match ByteStr::try_from_str("Hello, World!") {
+        Ok(v) => println!("{}", v.stringify()?),
+        Err(e) => println!("{:?}", e)
+    };
+
 
     println!("Int unwrap test:");
-    let i = Int::from_isize(-0);
-    println!("{}", i.stringify().unwrap())
+    let i = Int::from(-0);
+    println!("{}", i.stringify()?);
+
+    Ok(())
 }
