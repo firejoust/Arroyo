@@ -1,5 +1,12 @@
 pub trait Literal {
-    fn stringify(&self) -> Result<String, &str>;
+    fn stringify(&self) -> Result<String, Error>;
+}
+
+
+#[derive(Debug)]
+pub enum Error {
+    FromUtf8,
+    NonStandardChar(char)
 }
 
 /*
@@ -19,12 +26,12 @@ pub struct ByteStr {
 impl Literal for ByteStr {
 
     // create a String representation from ASCII sequence
-    fn stringify(&self) -> Result<String, &str> {
+    fn stringify(&self) -> Result<String, Error> {
         let arr = &self.content;
         let ascii_result = String::from_utf8(arr.to_vec());
         match ascii_result {
             Ok(trailer) => Ok(format!("{}:{}", arr.len(), trailer)),
-            Err(_) => Err("Failed to parse u8 sequence as utf8 String")
+            Err(_) => Err(Error::FromUtf8)
         }
     }
 }
@@ -32,14 +39,14 @@ impl Literal for ByteStr {
 impl ByteStr {
 
     // create a ByteStr from a string slice
-    pub fn from_str(ascii_128_str: &str) -> Result<Self, &str> {
+    pub fn try_from_str(ascii_128_str: &str) -> Result<Self, Error> {
         let mut arr: Vec<u8> = vec![];
         // allocate chars to ASCII decimal vec
         for c in ascii_128_str.chars() {
             let decimal = c as usize;
             // char incompatible with bencode
             if decimal > 127 {
-                return Err::<Self, &str>("Char does not conform with ascii-128 standard!")
+                return Err(Error::NonStandardChar(c))
             }
             arr.push(c as u8);
         }
@@ -62,15 +69,15 @@ pub struct Int {
 
 impl Literal for Int {
 
-    fn stringify(&self) -> Result<String, &str> {
+    fn stringify(&self) -> Result<String, Error> {
         Ok(format!("i{}e", self.content))
     }
 }
 
-impl Int {
-    pub fn from_isize(signed_64_int: isize) -> Self {
+impl From<isize> for Int {
+    fn from(content: isize) -> Int {
         Int {
-            content: signed_64_int
+            content
         }
     }
 }
