@@ -2,7 +2,6 @@ pub trait Literal {
     fn stringify(&self) -> Result<String, Error>;
 }
 
-
 #[derive(Debug)]
 pub enum Error {
     FromUtf8,
@@ -24,7 +23,6 @@ pub struct ByteStr {
 }
 
 impl Literal for ByteStr {
-
     // create a String representation from ASCII sequence
     fn stringify(&self) -> Result<String, Error> {
         let arr = &self.content;
@@ -37,10 +35,10 @@ impl Literal for ByteStr {
 }
 
 impl ByteStr {
-
     // create a ByteStr from a string slice
     pub fn try_from_str(ascii_128_str: &str) -> Result<Self, Error> {
-        let mut arr: Vec<u8> = vec![];
+        let mut content: Vec<u8> = vec![];
+        
         // allocate chars to ASCII decimal vec
         for c in ascii_128_str.chars() {
             let decimal = c as usize;
@@ -48,13 +46,10 @@ impl ByteStr {
             if decimal > 127 {
                 return Err(Error::NonStandardChar(c))
             }
-            arr.push(c as u8);
+            content.push(c as u8);
         }
-        Ok(
-            ByteStr { 
-                content: arr
-            }
-        )
+
+        Ok(ByteStr { content })
     }
 }
 
@@ -76,8 +71,36 @@ impl Literal for Int {
 
 impl From<isize> for Int {
     fn from(content: isize) -> Int {
-        Int {
-            content
+        Int { content }
+    }
+}
+
+/*
+**  Lists are encoded as follows: l<bencoded values>e
+**  The initial l and trailing e are beginning and ending delimiters.
+**  Lists may contain any bencoded type, including integers, strings, dictionaries, and even lists within other lists. 
+*/
+
+pub struct List {
+    content: Vec<Box<dyn Literal>>
+}
+
+impl Literal for List {
+    fn stringify(&self) -> Result<String, Error> {
+        let mut ascii = String::new();
+        for i in self.content.iter() {
+            let result = i.stringify();
+            match result {
+                Ok(v) => ascii.push_str(v.as_str()),
+                Err(e) => return Err(e)
+            }
         }
+        Ok(format!("l{}e", ascii))
+    }
+}
+
+impl From<Vec<Box<dyn Literal>>> for List {
+    fn from(content: Vec<Box<dyn Literal>>) -> Self {
+        List { content }
     }
 }
