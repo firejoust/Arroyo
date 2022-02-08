@@ -93,11 +93,8 @@ impl Literal for List {
     fn stringify(&self) -> Result<String, Error> {
         let mut ascii = String::new();
         for i in self.content.iter() {
-            let result = i.stringify();
-            match result {
-                Ok(v) => ascii.push_str(v.as_str()),
-                Err(e) => return Err(e)
-            }
+            let result = i.stringify()?;
+            ascii.push_str(result.as_str());
         }
         Ok(format!("l{}e", ascii))
     }
@@ -123,14 +120,10 @@ impl Literal for Dict {
     fn stringify(&self) -> Result<String, Error> {
         let mut ascii = String::new();
         for (key, value) in self.content.iter() {
-            match key.stringify() {
-                Ok(v) => ascii.push_str(v.as_str()),
-                Err(e) => return Err(e)
-            }
-            match value.stringify() {
-                Ok(v) => ascii.push_str(v.as_str()),
-                Err(e) => return Err(e)
-            }
+            let key = key.stringify()?;
+            let value = value.stringify()?;
+            ascii.push_str(key.as_str());
+            ascii.push_str(value.as_str());
         }
         Ok(format!("d{}e", ascii))
     }
