@@ -1,136 +1,125 @@
 #[derive(Debug)]
 pub enum Error {
-    FromUtf8,
     NonStandardChar(char)
 }
 
-pub trait Literal {
-    fn stringify(&self) -> Result<String, Error>;
+
+pub trait Encodable {
+    fn encode(&self) -> Result<String, Error>;
 }
-
-// non primative bencode types
-pub type ListEntry = Box<dyn Literal>;
-pub type DictEntry = (ByteStr, Box<dyn Literal>);
-
-/*
-**  Bencode data structures
-**  (https://wiki.theory.org/index.php/BitTorrentSpecification#Bencoding)
-*/
 
 /*
 **  Byte strings are encoded as follows: <string length encoded in base ten ASCII>:<string data>
 **  Note that there is no constant beginning delimiter, and no ending delimiter.
 */
-
-pub struct ByteStr {
-    content: Vec<u8>
-}
-
-impl Literal for ByteStr {
-    // create a String representation from ASCII sequence
-    fn stringify(&self) -> Result<String, Error> {
-        let arr = &self.content;
-        let ascii_result = String::from_utf8(arr.to_vec());
-        match ascii_result {
-            Ok(trailer) => Ok(format!("{}:{}", arr.len(), trailer)),
-            Err(_) => Err(Error::FromUtf8)
-        }
-    }
-}
-
-impl ByteStr {
-    // create a ByteStr from a string slice
-    pub fn try_from_str(ascii_128_str: &str) -> Result<Self, Error> {
-        let mut content: Vec<u8> = vec![];
-
-        // allocate chars to ASCII decimal vec
-        for c in ascii_128_str.chars() {
-            let decimal = c as usize;
-            // char incompatible with bencode
-            if decimal > 127 {
+impl Encodable for &str {
+    fn encode(&self) -> Result<String, Error> {
+        let mut bstring: Vec<char> = Vec::new();
+        for c in self.chars() {
+            if c as u32 > 127 {
                 return Err(Error::NonStandardChar(c))
             }
-            content.push(c as u8);
+
+            bstring.push(c);
         }
 
-        Ok(ByteStr { content })
+
+        Ok(
+            format!("{}:{}", bstring.len(), bstring.iter().collect::<String>())
+        )
     }
 }
+
+impl Encodable for String {
+    fn encode(&self) -> Result<String, Error> {
+        Ok(Encodable::encode(&&self[..])?)
+    }
+}
+
 
 /*
 **  Integers are encoded as follows: i<integer encoded in base ten ASCII>e
 **  The initial i and trailing e are beginning and ending delimiters.
 */
-
-pub struct Int {
-    content: isize
+macro_rules! encode_int {
+    ($int: ty) => {
+        impl Encodable for $int {
+            fn encode(&self) -> Result<String, Error> {
+                Ok(format!("i{}e", self))
+            }
+        }
+    };
 }
+encode_int!(i8);    encode_int!(u8);
+encode_int!(i16);   encode_int!(u16);
+encode_int!(i32);   encode_int!(u32);
+encode_int!(i64);   encode_int!(u64);
+encode_int!(isize); encode_int!(usize);
 
-impl Literal for Int {
-
-    fn stringify(&self) -> Result<String, Error> {
-        Ok(format!("i{}e", self.content))
-    }
-}
-
-impl From<isize> for Int {
-    fn from(content: isize) -> Int {
-        Int { content }
-    }
-}
 
 /*
 **  Lists are encoded as follows: l<bencoded values>e
 **  The initial l and trailing e are beginning and ending delimiters.
 **  Lists may contain any bencoded type, including integers, strings, dictionaries, and even lists within other lists.
 */
-
-pub struct List {
-    content: Vec<ListEntry>
-}
-
-impl Literal for List {
-    fn stringify(&self) -> Result<String, Error> {
-        let mut ascii = String::new();
-        for i in self.content.iter() {
-            let result = i.stringify()?;
-            ascii.push_str(result.as_str());
+impl Encodable for Vec<Box<dyn Encodable>> {
+    fn encode(&self) -> Result<String, Error> {
+        let mut bstring: Vec<char> = Vec::new();
+        
+        for item in self {
+            bstring.extend(item.encode()?.chars())
         }
-        Ok(format!("l{}e", ascii))
+
+        Ok(format!("l{}e", bstring.iter().collect::<String>()))
     }
 }
 
-impl From<Vec<ListEntry>> for List {
-    fn from(content: Vec<ListEntry>) -> Self {
-        List { content }
-    }
-}
 
 /*
 **  Dictionaries are encoded as follows: d<bencoded string><bencoded element>e
 **  The initial d and trailing e are the beginning and ending delimiters.
 **  The values may be integers, strings, lists, and other dictionaries.
 */
-
-pub struct Dict {
-    content: Vec<DictEntry>
+// Dictionary encoding is seperate from encoding a regular vector as each entry needs to be sorted in
+// lexicogrpahical order of the key as per specification.
+pub type Dictionary = Vec<DictionaryEntry>;
+pub struct DictionaryEntry {
+    key: String,
+    elem: Box<dyn Encodable>
 }
 
-impl Literal for Dict {
-    fn stringify(&self) -> Result<String, Error> {
-        let mut ascii = String::new();
-        for (key, value) in self.content.iter() {
-            let key = key.stringify()?;
-            let value = value.stringify()?;
-            ascii.push_str(key.as_str());
-            ascii.push_str(value.as_str());
+impl DictionaryEntry {
+    /// Create a new dictionary entry from a key and an encodable element
+    pub fn new<T: Encodable+'static>(key: &str, elem: T) -> Self {
+        Self { 
+            key: key.to_string(),
+            elem: Box::new(elem)
         }
-        Ok(format!("d{}e", ascii))
     }
 }
 
-impl From<Vec<DictEntry>> for Dict {
-    fn from(content: Vec<DictEntry>) -> Self {
-        Dict { content }
+impl Encodable for DictionaryEntry {
+    fn encode(&self) -> Result<String, Error> {
+        Ok(
+            format!("{}{}", self.key.encode()?, self.elem.encode()?)
+        )
+    }
+}
+
+impl Encodable for Vec<DictionaryEntry> {
+    fn encode(&self) -> Result<String, Error> {
+        let mut entries = Vec::new();
+        for item in self {
+            entries.push(item);
+        }
+        entries.sort_by(|a, b| a.key.cmp(&b.key));
+
+        let mut bstring: Vec<char> = Vec::new();
+        for item in entries {
+            bstring.extend(item.encode()?.chars());
+
+        }
+
+        Ok(format!("d{}e", bstring.iter().collect::<String>()))
     }
 }
