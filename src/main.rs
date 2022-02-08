@@ -1,29 +1,28 @@
 mod arguments;
 mod encoding;
 
-use encoding::bencode::{ByteStr, Int, List, Dict, ListEntry, DictEntry, Literal, Error};
+use encoding::bencode::{Error, Encodable, DictionaryEntry, Dictionary};
 
 fn main() -> Result<(), Error> {
 
     println!("String unwrap test:");
-    match ByteStr::try_from_str("Hello, World!") {
-        Ok(v) => println!("{}", v.stringify()?),
-        Err(e) => println!("{:?}", e)
-    };
+    println!("{}", String::from("Hello, World!").encode()?);
 
     println!("Int unwrap test:");
-    let i = Int::from(-0);
-    println!("{}", i.stringify()?);
+    println!("{}", (-0 as isize).encode()?);
 
     println!("List unwrap test:");
-    let arr: Vec<ListEntry> = vec![Box::new(Int::from(5)), Box::new(Int::from(10))];
-    let l = List::from(arr);
-    println!("{}", l.stringify()?);
+    let list: Vec<Box<dyn Encodable>> = vec![Box::new(1 as isize), Box::new("owo")];
+    println!("{}", list.encode()?);
 
     println!("Dict unwrap test:");
-    let arr: Vec<DictEntry> = vec![(ByteStr::try_from_str("TestKey")?, Box::new(i))];
-    let d = Dict::from(arr);
-    println!("{}", d.stringify()?);
+    let dict: Dictionary = vec![
+        DictionaryEntry::new("Key1", "Elem1"),
+        DictionaryEntry::new("Key2", 2 as u8),
+        DictionaryEntry::new("List1", list)
+    ];
+    println!("{}", dict.encode()?);
+
 
     Ok(())
 }
