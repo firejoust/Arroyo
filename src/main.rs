@@ -1,7 +1,7 @@
 mod arguments;
-mod encoding;
+mod torrent;
 
-use encoding::bencode::{Error, Encodable, DictionaryEntry, Dictionary};
+use torrent::bencode::{Error, Encodable, DictionaryEntry, Dictionary};
 
 fn main() -> Result<(), Error> {
 
